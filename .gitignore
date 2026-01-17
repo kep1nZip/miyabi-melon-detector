@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# YOLO training output
+runs/
+
+# Dataset besar (opsional)
+dataset_raw/
+melon_dataset/
+
+# Virtual env
+.venv/
+env/
