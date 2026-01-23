@@ -2,34 +2,47 @@ import cv2
 from ultralytics import YOLO
 import pygame
 import time
+import os
 
 # ===============================
-# 1. LOAD MODEL YOLO
+# 0. PATH SETUP
 # ===============================
-model = YOLO("yolov8n.pt")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+
+# ===============================
+# 1. LOAD MODEL YOLO (CUSTOM)
+# ===============================
+model = YOLO("runs/detect/train2/weights/best.pt")
 
 # ===============================
 # 2. AUDIO SETUP
 # ===============================
 pygame.mixer.init()
-sound_watermelon = pygame.mixer.Sound("suara1.wav")
-sound_other = pygame.mixer.Sound("suara2.wav")
+sound_melon = pygame.mixer.Sound(os.path.join(ASSETS_DIR, "suara1.wav"))
+sound_other = pygame.mixer.Sound(os.path.join(ASSETS_DIR, "suara2.wav"))
 
 # ===============================
 # 3. VIDEO SETUP
 # ===============================
-video_watermelon = cv2.VideoCapture("video1.mp4")
-video_other = cv2.VideoCapture("video2.mp4")
+video_melon = cv2.VideoCapture(os.path.join(ASSETS_DIR, "video1.mp4"))
+video_other = cv2.VideoCapture(os.path.join(ASSETS_DIR, "video2.mp4"))
 
 # ===============================
 # 4. STATE & TIMER
 # ===============================
-state = "idle"          # idle | watermelon | other
+state = "idle"          # idle | melon | other
 current_video = None
 
 pending_state = None
 state_start_time = 0
 DELAY_SECONDS = 1.0     # ⏱️ anti flicker
+
+# smoothing frame
+melon_frame_count = 0
+FRAME_CONFIRM = 2
+NO_OBJECT_COUNT = 0
+NO_OBJECT_THRESHOLD = 5
 
 # ===============================
 # 5. KAMERA
@@ -38,6 +51,8 @@ cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 if not cap.isOpened():
     print("❌ Kamera tidak terbuka")
     exit()
+
+print("🟢 START → IDLE")
 
 # ===============================
 # 6. LOOP UTAMA
@@ -48,35 +63,38 @@ while True:
         break
 
     # ===============================
-    # DETEKSI OBJEK
+    # DETEKSI MELON SAJA
     # ===============================
-    results = model(frame, conf=0.4, verbose=False)
+    results = model(frame, conf=0.3, iou=0.5, verbose=False)
 
-    detected_watermelon = False
-    detected_other = False
+    detected_melon = False
+    detected_anything = False
 
     for r in results:
-        for box in r.boxes:
-            cls = int(box.cls[0])
-            label = model.names[cls]
-
-            # 🍉 HANYA SEMANGKA
-            if label == "watermelon":
-                detected_watermelon = True
-
-            # 🍎 BUAH LAIN
-            elif label in ["apple", "banana", "orange"]:
-                detected_other = True
+        if r.boxes is not None and len(r.boxes) > 0:
+            detected_anything = True
+            detected_melon = True   # karena model kamu khusus melon
+            break
 
     # ===============================
-    # PRIORITAS STATE
+    # FRAME SMOOTHING
     # ===============================
-    if detected_watermelon:
-        desired_state = "watermelon"
-    elif detected_other:
-        desired_state = "other"
+    if detected_melon:
+        melon_frame_count += 1
+        NO_OBJECT_COUNT = 0
     else:
+        melon_frame_count = 0
+        NO_OBJECT_COUNT += 1
+
+    # ===============================
+    # TENTUKAN STATE (FIXED)
+    # ===============================
+    if melon_frame_count >= FRAME_CONFIRM:
+        desired_state = "melon"
+    elif NO_OBJECT_COUNT >= NO_OBJECT_THRESHOLD:
         desired_state = "idle"
+    else:
+        desired_state = state
 
     # ===============================
     # DELAY ANTI FLICKER
@@ -88,19 +106,13 @@ while True:
         elif time.time() - state_start_time >= DELAY_SECONDS:
             pygame.mixer.stop()
 
-            if desired_state == "watermelon":
-                sound_watermelon.play()
-                video_watermelon.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                current_video = video_watermelon
-                print("🍉 WATERMELON")
+            if desired_state == "melon":
+                sound_melon.play()
+                video_melon.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                current_video = video_melon
+                print("🍉 MELON")
 
-            elif desired_state == "other":
-                sound_other.play()
-                video_other.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                current_video = video_other
-                print("🍎 BUAH LAIN")
-
-            else:  # idle
+            elif desired_state == "idle":
                 current_video = None
                 print("⬜ IDLE")
 
@@ -120,13 +132,12 @@ while True:
 
         cv2.imshow("Video Output", vid_frame)
     else:
-        # aman tutup window kalau idle
         if cv2.getWindowProperty("Video Output", cv2.WND_PROP_VISIBLE) >= 1:
             cv2.destroyWindow("Video Output")
 
     cv2.imshow("Camera", frame)
 
-    # ESC untuk keluar
+    # ESC keluar
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
@@ -134,7 +145,7 @@ while True:
 # 7. CLEAN UP
 # ===============================
 cap.release()
-video_watermelon.release()
+video_melon.release()
 video_other.release()
 cv2.destroyAllWindows()
 pygame.mixer.quit()
