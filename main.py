@@ -4,49 +4,29 @@ import pygame
 import time
 import os
 
-# ===============================
-# 0. PATH SETUP
-# ===============================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 
-# ===============================
-# 1. LOAD MODEL YOLO (CUSTOM)
-# ===============================
 model = YOLO("runs/detect/train2/weights/best.pt")
 
-# ===============================
-# 2. AUDIO SETUP
-# ===============================
 pygame.mixer.init()
 sound_melon = pygame.mixer.Sound(os.path.join(ASSETS_DIR, "suara1.wav"))
 sound_other = pygame.mixer.Sound(os.path.join(ASSETS_DIR, "suara2.wav"))
-
-# ===============================
-# 3. VIDEO SETUP
-# ===============================
 video_melon = cv2.VideoCapture(os.path.join(ASSETS_DIR, "video1.mp4"))
 video_other = cv2.VideoCapture(os.path.join(ASSETS_DIR, "video2.mp4"))
 
-# ===============================
-# 4. STATE & TIMER
-# ===============================
-state = "idle"          # idle | melon | other
+state = "idle"
 current_video = None
 
 pending_state = None
 state_start_time = 0
-DELAY_SECONDS = 1.0     # ⏱️ anti flicker
+DELAY_SECONDS = 1.0 
 
-# smoothing frame
 melon_frame_count = 0
 FRAME_CONFIRM = 2
 NO_OBJECT_COUNT = 0
 NO_OBJECT_THRESHOLD = 5
 
-# ===============================
-# 5. KAMERA
-# ===============================
 cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 if not cap.isOpened():
     print("❌ Kamera tidak terbuka")
@@ -54,17 +34,11 @@ if not cap.isOpened():
 
 print("🟢 START → IDLE")
 
-# ===============================
-# 6. LOOP UTAMA
-# ===============================
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    # ===============================
-    # DETEKSI MELON SAJA
-    # ===============================
     results = model(frame, conf=0.3, iou=0.5, verbose=False)
 
     detected_melon = False
@@ -73,12 +47,9 @@ while True:
     for r in results:
         if r.boxes is not None and len(r.boxes) > 0:
             detected_anything = True
-            detected_melon = True   # karena model kamu khusus melon
+            detected_melon = True
             break
 
-    # ===============================
-    # FRAME SMOOTHING
-    # ===============================
     if detected_melon:
         melon_frame_count += 1
         NO_OBJECT_COUNT = 0
@@ -86,9 +57,6 @@ while True:
         melon_frame_count = 0
         NO_OBJECT_COUNT += 1
 
-    # ===============================
-    # TENTUKAN STATE (FIXED)
-    # ===============================
     if melon_frame_count >= FRAME_CONFIRM:
         desired_state = "melon"
     elif NO_OBJECT_COUNT >= NO_OBJECT_THRESHOLD:
@@ -96,9 +64,6 @@ while True:
     else:
         desired_state = state
 
-    # ===============================
-    # DELAY ANTI FLICKER
-    # ===============================
     if desired_state != state:
         if pending_state != desired_state:
             pending_state = desired_state
@@ -121,9 +86,6 @@ while True:
     else:
         pending_state = None
 
-    # ===============================
-    # TAMPILKAN VIDEO
-    # ===============================
     if current_video is not None:
         ret_vid, vid_frame = current_video.read()
         if not ret_vid:
@@ -141,9 +103,8 @@ while True:
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
-# ===============================
-# 7. CLEAN UP
-# ===============================
+#CLEAN UP
+
 cap.release()
 video_melon.release()
 video_other.release()
